@@ -1,58 +1,33 @@
-# Flying Toasters - SDL2 version (Wayland, Raspberry Pi compatible)
-# Dependencies: libsdl2-dev (sudo apt install libsdl2-dev)
-#
-# On Raspberry Pi with Wayland, SDL2 will use Wayland automatically.
-# To force Wayland: SDL_VIDEODRIVER=wayland ./bin/flying-toasters
-# To run windowed: ./bin/flying-toasters -windowed
+# Builds src/FlyingToastersSaver.cpp (+ src/xpm.c) into a Haiku screen
+# saver add-on. Run from the project root.
 
-CC = gcc
-CFLAGS = -std=c99 -Wall -Wextra
-SDL_CFLAGS = $(shell pkg-config --cflags sdl2 2>/dev/null || sdl2-config --cflags 2>/dev/null)
-SDL_LIBS = $(shell pkg-config --libs sdl2 2>/dev/null || sdl2-config --libs 2>/dev/null)
-X11_CFLAGS = $(shell pkg-config --cflags x11 xpm 2>/dev/null)
-X11_LIBS = $(shell pkg-config --libs x11 xpm 2>/dev/null)
+SRCDIR   = src
+NAME     = FlyingToasters
+TARGET   = $(SRCDIR)/$(NAME)
+CXX      = g++
+CXXFLAGS = -O2 -Wall -Wno-write-strings -fPIC $(shell pkg-config --cflags sdl2)
+LIBS     = -lbe $(shell pkg-config --libs sdl2)
 
-# xscreensaver X11 path - enable when pkg-config finds it, or on Linux with headers, or FORCE_X11=1
-HAVE_X11 =
-ifneq ($(X11_CFLAGS),)
-  HAVE_X11 = 1
-  X11_LIBS := $(or $(X11_LIBS),-lX11 -lXpm)
-endif
-ifeq ($(HAVE_X11),)
-  ifeq ($(shell uname -s 2>/dev/null),Linux)
-    ifeq ($(shell test -f /usr/include/X11/Xlib.h 2>/dev/null && echo y),y)
-      HAVE_X11 = 1
-      X11_CFLAGS =
-      X11_LIBS = -lX11 -lXpm
-    endif
-  endif
-endif
-ifdef FORCE_X11
-  HAVE_X11 = 1
-  X11_CFLAGS =
-  X11_LIBS = -lX11 -lXpm
-endif
+SRCS = $(SRCDIR)/FlyingToastersSaver.cpp $(SRCDIR)/xpm.c
+OBJS = $(SRCS:.cpp=.o)
+OBJS := $(OBJS:.c=.o)
 
-SRCS = src/flying-toasters.c src/xpm.c
-X11_SRCS =
-TARGET = bin/flying-toasters
-ifdef HAVE_X11
-  X11_SRCS = src/xscreensaver-x11.c
-  CFLAGS += -DHAVE_XSCREENSAVER_X11
-endif
+all: $(TARGET)
 
-.PHONY: build clean init run all
+$(TARGET): $(OBJS)
+	$(CXX) -shared -o $(TARGET) $(OBJS) $(LIBS)
 
-build: init clean
-	$(CC) $(CFLAGS) $(SDL_CFLAGS) $(X11_CFLAGS) -o $(TARGET) $(SRCS) $(X11_SRCS) $(SDL_LIBS) $(if $(X11_SRCS),$(X11_LIBS),)
+$(SRCDIR)/%.o: $(SRCDIR)/%.cpp
+	$(CXX) $(CXXFLAGS) -c $< -o $@
+
+$(SRCDIR)/%.o: $(SRCDIR)/%.c
+	$(CXX) $(CXXFLAGS) -c $< -o $@
+
+install: $(TARGET)
+	mkdir -p "$(HOME)/config/non-packaged/add-ons/Screen Savers"
+	cp $(TARGET) "$(HOME)/config/non-packaged/add-ons/Screen Savers/$(NAME)"
 
 clean:
-	rm -f $(TARGET)
+	rm -f $(OBJS) $(TARGET)
 
-init:
-	mkdir -p bin
-
-run:
-	./bin/flying-toasters -windowed
-
-all: build run
+.PHONY: all install clean
